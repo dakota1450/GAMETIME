@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>THE PACT — dig deep</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="game-root">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Heads-up display -->
+    <div id="hud">
+      <div id="hud-top">
+        <div id="region-badge">
+          <span id="region-name">THE HOLD</span>
+          <span id="depth-tier">SAFE HAVEN</span>
+        </div>
+        <div id="vit-wrap">
+          <div class="bar-row">
+            <span class="bar-label">VIT</span>
+            <div class="bar-track"><div id="health-fill" class="bar-fill health"></div></div>
+            <span id="health-text" class="bar-num">100/100</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- the hotbar -->
+      <div id="hotbar"></div>
+
+      <div id="prompt" class="hidden"></div>
+      <div id="toasts"></div>
+      <div id="banner" class="hidden"></div>
+    </div>
+
+    <!-- Overlay menus (inventory / crafting / storage) -->
+    <div id="overlay" class="hidden">
+      <div id="overlay-panel">
+        <div id="overlay-header">
+          <span id="overlay-title">MENU</span>
+          <button id="overlay-close" title="Close (Esc)">✕</button>
+        </div>
+        <div id="overlay-body"></div>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <div id="titlescreen">
+      <div class="title-inner">
+        <h1>THE PACT</h1>
+        <p class="tagline">You inherited a debt you can't read the terms of.<br/>Dig out the Hold. Mine the tiers. Forge your way deeper.</p>
+        <button id="btn-start">DESCEND INTO THE HOLD</button>
+        <button id="btn-continue" class="hidden">CONTINUE</button>
+        <div class="controls-hint">
+          <strong>WASD</strong> move · <strong>Mouse</strong> aim · <strong>Left-click / Space</strong> use selected ·
+          <strong>Right-click / F</strong> mine · <strong>1–0</strong> / <strong>scroll</strong> select · <strong>E</strong> use bench ·
+          <strong>I / Tab</strong> inventory · <strong>H</strong> heal · <strong>M</strong> mute
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Engine + game. Plain classic scripts (no build step), dependency order. -->
+  <script src="js/data.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/systems.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/lighting.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
