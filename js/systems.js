@@ -240,6 +240,22 @@
       S.scaleByDepth(G, e, depth);
       G.enemies.push(e); made++;
     }
+    S.spawnBosses(G);   // place one boss per biome ring
+  };
+
+  /* ---------- boss spawning ---------- */
+  S.spawnBosses = function (G) {
+    const bossMap = { 1: "burrow_king", 2: "salvager_hulk", 3: "sysadmin", 4: "the_ledger" };
+    const db = G.defeatedBosses || {};
+    for (const bi in bossMap) {
+      const biInt = parseInt(bi);
+      if (db[biInt]) continue;                                   // already defeated
+      const room = G.world.bossRooms && G.world.bossRooms[biInt];
+      if (!room) continue;
+      const e = new P.entities.Enemy(bossMap[bi], room.x, room.y);
+      e.isBoss = true;
+      G.enemies.push(e);
+    }
   };
   // trickle respawns in the dug-out dark, just off-screen, capped
   S.tickSpawns = function (G, dt) {
@@ -270,6 +286,54 @@
       const n = U.rngInt(Math.random, lo, hi);
       for (let i = 0; i < n; i++) S.spawnDrop(G, e.x, e.y, item, 1);
     }
+  };
+
+  /* ---------- XP / leveling ---------- */
+  S.gainXp = function (G, n) {
+    if (!n) return;
+    G.xp = (G.xp || 0) + n;
+    while (G.xp >= G.xpToNext) {
+      G.xp -= G.xpToNext;
+      G.level = (G.level || 1) + 1;
+      G.xpToNext = Math.ceil(20 * Math.pow(1.55, G.level - 1));
+      G.player.maxHp += 10;
+      G.player.hp = Math.min(G.player.hp + 10, G.player.maxHp);
+      G.banner("LEVEL UP!", "Lv." + G.level + " — Max Vitality +" + G.player.maxHp);
+      P.audio && P.audio.play("pickup");
+    }
+  };
+
+  /* ---------- chest interaction ---------- */
+  S.openChest = function (G, chest) {
+    if (!G.openedChests) G.openedChests = new Set();
+    if (G.openedChests.has(chest.id)) return;
+    G.openedChests.add(chest.id);
+    const table = (D.chestLoot || [])[chest.tier] || [];
+    if (!table.length) { G.toast("Empty chest.", "info"); return; }
+    // weighted random pick of 2-4 entries
+    const picks = Math.floor(2 + Math.random() * 3);
+    const totalW = table.reduce((a, e) => a + e.w, 0);
+    const chosen = [];
+    for (let p = 0; p < picks; p++) {
+      let roll = Math.random() * totalW, acc = 0;
+      for (const entry of table) {
+        acc += entry.w;
+        if (roll < acc) {
+          const n = Array.isArray(entry.n)
+            ? entry.n[0] + Math.floor(Math.random() * (entry.n[1] - entry.n[0] + 1))
+            : entry.n;
+          if (n > 0) { chosen.push({ item: entry.item, n }); }
+          break;
+        }
+      }
+    }
+    for (const { item, n } of chosen) {
+      G.addItem(item, n);
+      const it = D.items[item];
+      G.toast((it ? it.name : item) + " ×" + n, "good");
+    }
+    P.audio && P.audio.play("craft");
+    G.shake(2, 0.18);
   };
 
   /* ---------- death / respawn (Core Keeper-style: keep your stuff) ---------- */

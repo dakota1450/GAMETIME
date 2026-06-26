@@ -23,6 +23,11 @@
             <div class="bar-track"><div id="health-fill" class="bar-fill health"></div></div>
             <span id="health-text" class="bar-num">100/100</span>
           </div>
+          <div class="bar-row" style="margin-top:4px;">
+            <span class="bar-label" style="font-size:10px;color:var(--teal);">XP</span>
+            <div class="bar-track" style="height:6px;"><div id="xp-fill" class="bar-fill" style="background:var(--teal);width:0%;"></div></div>
+            <span id="level-badge" style="font-size:11px;color:var(--teal);width:32px;text-align:right;font-weight:700;">LV 1</span>
+          </div>
         </div>
       </div>
 
@@ -32,6 +37,12 @@
       <div id="prompt" class="hidden"></div>
       <div id="toasts"></div>
       <div id="banner" class="hidden"></div>
+    </div>
+
+    <!-- Boss health bar (hidden until a boss is engaged) -->
+    <div id="boss-bar" class="hidden">
+      <div id="boss-name">BOSS</div>
+      <div id="boss-track"><div id="boss-fill"></div></div>
     </div>
 
     <!-- Overlay menus (inventory / crafting / storage) -->

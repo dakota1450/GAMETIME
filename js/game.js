@@ -20,9 +20,15 @@
     sel: 0,
     selBox: null, curTarget: null,
     keys: {}, mouse: { x: 0, y: 0 }, mouseActive: false, mouseDown: false, mineDown: false,
-    started: false, lastT: 0, nearStation: null,
+    started: false, lastT: 0, nearStation: null, nearChest: null,
     shakeT: 0, shakeMag: 0, shakeDur: 1,
     _respawnT: 0, _toastT: 0,
+    // progression
+    xp: 0, level: 1, xpToNext: 20,
+    openedChests: new Set(),
+    defeatedBosses: {},
+    activeBoss: null,
+    equipped: { head: null, chest: null },
   };
 
   G.shake = function (mag, dur) {
@@ -76,6 +82,11 @@
     G.stash = {};
     G.sel = 0;
     G.world.edits = {}; G.world.builtStations = {};
+    G.xp = 0; G.level = 1; G.xpToNext = 20;
+    G.openedChests = new Set();
+    G.defeatedBosses = {};
+    G.activeBoss = null;
+    G.equipped = { head: null, chest: null };
     G.world.generate();
     for (const st of D.player.starting) G.addItem(st.item, st.n);
     const sp = G.world.holdSpawn();
@@ -91,12 +102,20 @@
     if (snap.inv) for (let i = 0; i < snap.inv.length && i < INV_SLOTS; i++) G.inv[i] = snap.inv[i] ? { item: snap.inv[i].item, n: snap.inv[i].n } : null;
     G.stash = snap.stash || {};
     G.sel = snap.sel || 0;
+    G.xp = snap.xp || 0;
+    G.level = snap.level || 1;
+    G.xpToNext = snap.xpToNext || Math.ceil(20 * Math.pow(1.55, (G.level || 1) - 1));
+    G.openedChests = new Set(snap.openedChests || []);
+    G.defeatedBosses = snap.defeatedBosses || {};
+    G.activeBoss = null;
+    G.equipped = snap.equipped || { head: null, chest: null };
     G.world.loadEdits(snap.edits || {});
     G.world.builtStations = snap.builtStations || {};
     G.world.generate();
     const sp = G.world.holdSpawn();
     G.player = new Player(snap.player ? snap.player.x : sp.x, snap.player ? snap.player.y : sp.y);
     if (snap.player && typeof snap.player.hp === "number") G.player.hp = U.clamp(snap.player.hp, 1, G.player.maxHp);
+    if (snap.player && typeof snap.player.maxHp === "number") G.player.maxHp = snap.player.maxHp;
     S.populate(G);
     G.beginPlay();
     G.toast("Loaded your dig.", "info");
@@ -178,15 +197,31 @@
 
     if (G.world.isSafeAtPx(p.x, p.y) && p.hp < p.maxHp) p.heal(D.player.holdRegen * dt);
 
+    // compute armor defense from equipped slots
+    let def = 0;
+    for (const slot of ["head", "chest"]) {
+      const item = G.equipped[slot];
+      if (item) { const it = D.items[item]; if (it && it.armor) def += (it.armor.defense || 0); }
+    }
+    p.defense = def;
+
     for (const e of G.enemies) if (!e.dead) e.update(dt, G);
     for (let i = G.enemies.length - 1; i >= 0; i--) {
       const e = G.enemies[i];
       if (e.dead) {
         S.addEffect(G, { type: "burst", x: e.x, y: e.y, dur: 0.4, col: e.color, n: 9, spread: 26 });
         S.enemyDrop(G, e);
+        S.gainXp(G, e.def.xp || 1);
+        if (e.isBoss && e.def.biome != null) {
+          G.defeatedBosses[e.def.biome] = true;
+          G.banner(e.def.name + " DEFEATED", "The Pact is satisfied... for now.");
+          G.shake(8, 0.6);
+        }
         G.enemies.splice(i, 1);
       }
     }
+    // track active boss (nearest alive boss)
+    G.activeBoss = G.enemies.find(e => e.isBoss && !e.dead) || null;
     S.tickSpawns(G, dt);
 
     for (const pr of G.projectiles) pr.update(dt, G);
@@ -226,18 +261,35 @@
     const p = G.player;
     const s = G.world.stationNear(p.x, p.y, 40);
     G.nearStation = s;
+    const ch = G.world.chestNear(p.x, p.y, 38, G.openedChests);
+    G.nearChest = ch;
     if (s && (s.type === "furnace" || s.type === "tinker" || s.type === "anvil" || s.type === "forge")) ui.setPrompt("[E] Use " + s.name);
     else if (s && s.type === "storage") ui.setPrompt("[E] Storage (deposit)");
     else if (s && s.type === "bed") ui.setPrompt("[E] Rest — heal up");
+    else if (ch) ui.setPrompt("[E] Open Chest (Tier " + ch.tier + ")");
     else ui.setPrompt(null);
   };
 
   G.interact = function () {
+    const ch = G.nearChest;
+    if (ch) { S.openChest(G, ch); return; }
     const s = G.nearStation;
     if (!s) return;
     if (s.type === "furnace" || s.type === "tinker" || s.type === "anvil" || s.type === "forge") ui.showCrafting(G, s.type);
     else if (s.type === "storage") ui.showStorage(G);
     else if (s.type === "bed") { G.player.heal(G.player.maxHp); G.toast("Rested. Vitality restored.", "good"); P.audio && P.audio.play("heal"); }
+  };
+
+  /* equip an armor item from inventory (or null to unequip) */
+  G.equip = function (itemId) {
+    const it = D.items[itemId];
+    if (!it || it.kind !== "armor") return;
+    const slot = it.slot;
+    const prev = G.equipped[slot];
+    if (prev) G.addItem(prev, 1);          // return old piece to inventory
+    G.takeItem(itemId, 1);
+    G.equipped[slot] = itemId;
+    G.toast("Equipped: " + it.name + " (" + (it.armor.defense * 100 | 0) + "% defense)", "good");
   };
 
   /* ---------------- input router ---------------- */
@@ -275,6 +327,7 @@
     ctx.imageSmoothingEnabled = false;
     const vwW = G.vw / G.zoom, vhW = G.vh / G.zoom;
     G.world.render(ctx, G.cam, vwW, vhW, G.selBox);
+    G.world.renderChests(ctx, G.cam, vwW, vhW, G.openedChests);
     for (const pk of G.pickups) pk.draw(ctx, G.cam);
     for (const fx of G.effects) G.drawEffect(ctx, fx);
     for (const pr of G.projectiles) pr.draw(ctx, G.cam);
@@ -314,13 +367,17 @@
   /* ---------------- save ---------------- */
   G.snapshot = function () {
     return {
-      v: 3,
+      v: 4,
       inv: G.inv.map(s => s ? { item: s.item, n: s.n } : null),
       stash: G.stash,
       sel: G.sel,
       edits: G.world.edits,
       builtStations: G.world.builtStations,
-      player: { x: G.player.x, y: G.player.y, hp: G.player.hp },
+      player: { x: G.player.x, y: G.player.y, hp: G.player.hp, maxHp: G.player.maxHp },
+      xp: G.xp, level: G.level, xpToNext: G.xpToNext,
+      openedChests: [...G.openedChests],
+      defeatedBosses: G.defeatedBosses,
+      equipped: G.equipped,
     };
   };
   G.persist = function () { P.save.write(G.snapshot()); };

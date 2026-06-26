@@ -18,7 +18,7 @@
     btnContinue.addEventListener("click", () => {
       P.audio.init();
       const snap = P.save.read();
-      if (snap && snap.v === 3) G.loadGame(snap); else G.newGame();
+      if (snap && (snap.v === 3 || snap.v === 4)) G.loadGame(snap); else G.newGame();
     });
 
     wireInput();

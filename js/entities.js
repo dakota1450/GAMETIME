@@ -23,10 +23,12 @@
     this.attackCd = 0; this.mineCd = 0;
     this.invulnT = 0; this.hitFlash = 0;
     this.alive = true;
+    this.defense = 0;   // damage reduction 0..1, set each frame from equipped armor
   }
   Player.prototype.takeDamage = function (dmg) {
     if (this.invulnT > 0 || !this.alive) return false;
-    this.hp -= dmg;
+    const reduced = Math.max(1, Math.round(dmg * (1 - Math.min(0.75, this.defense || 0))));
+    this.hp -= reduced;
     this.invulnT = D.player.invuln;
     this.hitFlash = 0.25;
     return true;
@@ -186,10 +188,27 @@
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.beginPath(); ctx.arc(-r * 0.22, -r * 0.12, r * 0.18, 0, 6.28); ctx.arc(r * 0.22, -r * 0.12, r * 0.18, 0, 6.28); ctx.fill();
     ctx.restore();
+    // boss: glowing outer ring
+    if (this.isBoss) {
+      const pulse = 0.7 + 0.3 * Math.sin(this.animT * 3.5);
+      ctx.save(); ctx.strokeStyle = this.color; ctx.globalAlpha = 0.45 * pulse; ctx.lineWidth = 3;
+      ctx.shadowColor = this.color; ctx.shadowBlur = 18 * pulse;
+      ctx.beginPath(); ctx.arc(x, y + Math.sin(this.animT * 6) * 1.2, r * 1.6, 0, 6.28); ctx.stroke();
+      ctx.restore();
+    }
     if (this.hp < this.maxHp) {
       const w = r * 2;
       ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - r, y - r - 8, w, 3);
       ctx.fillStyle = "#ff5a6e"; ctx.fillRect(x - r, y - r - 8, w * (this.hp / this.maxHp), 3);
+    }
+    // boss: name label above
+    if (this.isBoss) {
+      ctx.save();
+      ctx.font = "bold 11px 'Pixelify Sans', monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#000"; ctx.fillText(this.def.name, x + 1, y - r - 10 + 1);
+      ctx.fillStyle = this.color; ctx.fillText(this.def.name, x, y - r - 10);
+      ctx.restore();
     }
   };
 

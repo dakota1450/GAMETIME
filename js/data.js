@@ -258,5 +258,65 @@
     ],
   };
 
+  /* ---- Boss enemies (one per biome ring, spawned into pre-carved rooms) ---- */
+  data.enemies.burrow_king = {
+    name: "The Burrow King", boss: true, biome: 1,
+    hp: 360, speed: 62, dmg: 18, radius: 30, color: "#a8d078", shape: "hex",
+    xp: 60, drops: [["iron_ore",[2,4]], ["fiber",[3,5]], ["copper_bar",[1,2]]],
+    behavior: "charge", aggro: 700,
+    atk: { range: 290, windup: 0.55, dash: 520, dashTime: 0.5, cd: 2.2 },
+  };
+  data.enemies.salvager_hulk = {
+    name: "The Salvager Hulk", boss: true, biome: 2,
+    hp: 540, speed: 46, dmg: 24, radius: 34, color: "#e8a870", shape: "square",
+    xp: 100, drops: [["iron_bar",[1,2]], ["tin_bar",[2,3]]],
+    behavior: "shoot", aggro: 700,
+    atk: { range: 420, prefer: 260, windup: 0.65, projSpeed: 270, projDmg: 20, burst: 5, spread: 0.24, cd: 3.0, projColor: "#e8a870" },
+  };
+  data.enemies.sysadmin = {
+    name: "The Sysadmin", boss: true, biome: 3,
+    hp: 780, speed: 54, dmg: 30, radius: 38, color: "#c090ff", shape: "diamond",
+    xp: 160, drops: [["crystal_bar",[1,2]], ["crystal",[2,4]]],
+    behavior: "shoot", aggro: 800,
+    atk: { range: 460, prefer: 270, windup: 0.55, projSpeed: 300, projDmg: 24, burst: 7, spread: 0.26, cd: 2.8, projColor: "#c090ff" },
+  };
+  data.enemies.the_ledger = {
+    name: "THE LEDGER", boss: true, biome: 4,
+    hp: 1400, speed: 50, dmg: 38, radius: 46, color: "#ffd24a", shape: "hex",
+    xp: 350, drops: [["core_shard",[3,5]], ["crystal_bar",[1,2]]],
+    behavior: "charge", aggro: 900,
+    atk: { range: 380, windup: 0.7, dash: 640, dashTime: 0.55, cd: 1.7 },
+  };
+
+  /* ---- Armor items ---- */
+  data.items.helm_copper      = { name: "Copper Helm",     kind: "armor", slot: "head",  color: "#e8975a", tier: 2, armor: { defense: 0.10 }, max: 1 };
+  data.items.plate_iron       = { name: "Iron Plate",      kind: "armor", slot: "chest", color: "#cdb9a6", tier: 3, armor: { defense: 0.18 }, max: 1 };
+  data.items.lattice_crystal  = { name: "Crystal Lattice", kind: "armor", slot: "head",  color: "#c4a0ff", tier: 4, armor: { defense: 0.14 }, max: 1 };
+
+  /* ---- Armor recipes ---- */
+  data.recipes.push(
+    { station: "tinker", out: { helm_copper: 1 },     cost: { copper_bar: 4, fiber: 2 } },
+    { station: "anvil",  out: { plate_iron: 1 },       cost: { iron_bar: 6 } },
+    { station: "forge",  out: { lattice_crystal: 1 },  cost: { crystal_bar: 5, iron_bar: 2 } }
+  );
+
+  /* ---- Chest loot tables (indexed 1..4 by biome ring tier) ---- */
+  data.chestLoot = [
+    [],   // tier 0 — Hold (no chests)
+    // tier 1 — Hollows
+    [ {item:"copper_ore",n:[3,6],w:3}, {item:"tin_ore",n:[1,3],w:2}, {item:"fiber",n:[2,5],w:3},
+      {item:"bandage",n:[1,2],w:2},    {item:"torch",n:[3,6],w:2},   {item:"pick_copper",n:1,w:0.4},
+      {item:"glowdust",n:[1,3],w:1} ],
+    // tier 2 — Scrapsea
+    [ {item:"iron_ore",n:[2,4],w:3},   {item:"tin_bar",n:[1,2],w:2},  {item:"stew",n:[1,2],w:2},
+      {item:"pick_iron",n:1,w:0.25},   {item:"helm_copper",n:1,w:0.4},{item:"glowdust",n:[2,3],w:1} ],
+    // tier 3 — Stacks
+    [ {item:"crystal",n:[1,3],w:3},    {item:"iron_bar",n:[1,2],w:2}, {item:"stew",n:[1,2],w:1},
+      {item:"plate_iron",n:1,w:0.4},   {item:"pick_crystal",n:1,w:0.25},{item:"crystal_bar",n:[0,1],w:1} ],
+    // tier 4 — Core
+    [ {item:"core_shard",n:[1,3],w:3}, {item:"crystal_bar",n:[1,2],w:2},
+      {item:"lattice_crystal",n:1,w:0.4} ],
+  ];
+
   P.data = data;
 })(window.PACT = window.PACT || {});

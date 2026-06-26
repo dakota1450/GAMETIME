@@ -28,6 +28,9 @@
     this.decor = [];          // {x,y,sprite,scale,flip,glow?}
     this.glowDecor = [];      // emissive decor for lighting
     this.builtStations = {};  // type -> {c,r} for persistence
+    this.chests     = [];     // {id,c,r,x,y,tier} — world loot chests
+    this.bossRooms  = {};     // biomeIndex -> {x,y} pre-carved boss chamber
+    this.openedChests = new Set(); // ids of chests opened this session (synced from G)
   }
 
   /* ---------- index helpers ---------- */
@@ -132,6 +135,8 @@
     }
 
     this._carveHold();
+    this._placeBossRooms(U.makeRng(W.seedBase ^ 0xB0551));  // separate rng — boss chambers
+    this._placeChests(U.makeRng(W.seedBase ^ 0xC4E512));    // separate rng — loot chests
     this._applyEdits();
     this._buildOreGlows();
     this._placeDecor(rng);
@@ -488,6 +493,120 @@
   }
 
   // ground motes (drift over the dark) — drawn in screen space by game.render
+  /* ---------- Boss rooms: carve one pre-dug 3×3 chamber per biome ---------- */
+  World.prototype._placeBossRooms = function (rng) {
+    this.bossRooms = {};
+    // [biomeIndex, minRingTile, maxRingTile]
+    const targets = [ [1, 16, 30], [2, 37, 52], [3, 59, 73], [4, 82, 95] ];
+    for (const [bi, rMin, rMax] of targets) {
+      for (let tries = 0; tries < 1200; tries++) {
+        const a = rng() * Math.PI * 2;
+        const d = rMin + rng() * (rMax - rMin);
+        const c = Math.round(this.cx + Math.cos(a) * d);
+        const r = Math.round(this.cy + Math.sin(a) * d);
+        if (!this.inBounds(c - 2, r - 2) || !this.inBounds(c + 2, r + 2)) continue;
+        if (this.biomeIndexAt(c, r) !== bi) continue;
+        // carve a 3×3 chamber
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const i = (r + dr) * this.cols + (c + dc);
+            this.wall[i] = 0;
+          }
+        }
+        const cen = this.centerOf(c, r);
+        this.bossRooms[bi] = { x: cen.x, y: cen.y, c, r };
+        break;
+      }
+    }
+  };
+
+  /* ---------- Chests: seed ~70 loot chests in natural cave pockets ---------- */
+  World.prototype._placeChests = function (rng) {
+    this.chests = [];
+    let id = 0;
+    const want = 70, tries_max = 8000;
+    let tries = 0;
+    while (id < want && tries++ < tries_max) {
+      const c = 2 + Math.floor(rng() * (this.cols - 4));
+      const r = 2 + Math.floor(rng() * (this.rows - 4));
+      const bi = this.biomeIndexAt(c, r);
+      if (bi < 1) continue;              // no chests in Hold
+      if (this.wall[r * this.cols + c] !== 0) continue; // must be on open floor
+      // spacing: no two chests within 7 tiles of each other
+      let tooClose = false;
+      for (const ch of this.chests) {
+        if (Math.abs(ch.c - c) < 7 && Math.abs(ch.r - r) < 7) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      const cen = this.centerOf(c, r);
+      this.chests.push({ id: id++, c, r, x: cen.x, y: cen.y, tier: bi });
+    }
+  };
+
+  /* ---------- Chest proximity query ---------- */
+  // Returns nearest open, unopened chest within px range, or null.
+  World.prototype.chestNear = function (px, py, range, openedSet) {
+    let best = null, bestD = range * range;
+    for (const ch of this.chests) {
+      if (openedSet && openedSet.has(ch.id)) continue;
+      if (this.wall[ch.r * this.cols + ch.c] !== 0) continue; // tile must be dug out
+      const dx = ch.x - px, dy = ch.y - py;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD) { bestD = d2; best = ch; }
+    }
+    return best;
+  };
+
+  /* ---------- Chest rendering ---------- */
+  World.prototype.renderChests = function (ctx, cam, vwW, vhH, openedSet) {
+    for (const ch of this.chests) {
+      if (openedSet && openedSet.has(ch.id)) continue;
+      // only render if tile is open
+      if (this.wall[ch.r * this.cols + ch.c] !== 0) continue;
+      const sx = ch.x - cam.x + vwW / 2;
+      const sy = ch.y - cam.y + vhH / 2;
+      if (sx < -32 || sx > vwW + 32 || sy < -32 || sy > vhH + 32) continue;
+      this._drawChest(ctx, sx, sy, ch.tier);
+    }
+  };
+
+  World.prototype._drawChest = function (ctx, sx, sy, tier) {
+    const tierColors = ["#888", "#e8975a", "#c8b4a0", "#c4a0ff", "#ffd24a"];
+    const col = tierColors[tier] || tierColors[1];
+    const s = TILE * 0.72;
+    ctx.save();
+    ctx.translate(sx, sy);
+    // body
+    ctx.fillStyle = "#3a2810";
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(-s / 2, -s * 0.3, s, s * 0.6, 3);
+    ctx.fill(); ctx.stroke();
+    // lid
+    ctx.fillStyle = "#4d3518";
+    ctx.beginPath();
+    ctx.roundRect(-s / 2, -s * 0.5, s, s * 0.22, [3, 3, 0, 0]);
+    ctx.fill(); ctx.stroke();
+    // metal band
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-s / 2, -s * 0.08); ctx.lineTo(s / 2, -s * 0.08);
+    ctx.stroke();
+    // latch
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.roundRect(-s * 0.07, -s * 0.24, s * 0.14, s * 0.16, 2);
+    ctx.fill();
+    // glow border
+    ctx.shadowColor = col; ctx.shadowBlur = 8;
+    ctx.strokeStyle = col; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(-s / 2, -s * 0.5, s, s * 0.8, 3);
+    ctx.stroke();
+    ctx.restore();
+  };
+
   World.prototype.renderMotes = function (ctx, vw, vh, biome) {
     if (!biome || biome.tier === 0) return;
     const t = U.now();

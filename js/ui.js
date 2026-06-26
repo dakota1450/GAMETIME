@@ -25,6 +25,11 @@
       overlayBody: document.getElementById("overlay-body"),
       overlayClose: document.getElementById("overlay-close"),
       hotbar: document.getElementById("hotbar"),
+      levelBadge: document.getElementById("level-badge"),
+      xpFill:     document.getElementById("xp-fill"),
+      bossBar:    document.getElementById("boss-bar"),
+      bossFill:   document.getElementById("boss-fill"),
+      bossName:   document.getElementById("boss-name"),
     };
     // build the 10 hotbar slots
     let hb = "";
@@ -38,7 +43,6 @@
 
   ui.updateHud = function (G) {
     const biome = G.world.biomeAtPx(G.player.x, G.player.y);
-    const depth = G.world.depthAtPx(G.player.x, G.player.y);
     el.regionName.textContent = biome.name;
     el.depthTier.textContent = biome.tier === 0 ? "SAFE HAVEN" : ("TIER " + biome.tier + " · " + (biome.blurb || ""));
     el.regionBadge.style.borderLeftColor = biome.accent;
@@ -46,6 +50,26 @@
     const hpFrac = U.clamp(G.player.hp / G.player.maxHp, 0, 1);
     el.healthFill.style.width = (hpFrac * 100).toFixed(1) + "%";
     el.healthText.textContent = Math.max(0, Math.ceil(G.player.hp)) + "/" + G.player.maxHp;
+
+    // level badge + XP bar
+    if (el.levelBadge) el.levelBadge.textContent = "LV " + (G.level || 1);
+    if (el.xpFill) {
+      const xpFrac = U.clamp((G.xp || 0) / (G.xpToNext || 1), 0, 1);
+      el.xpFill.style.width = (xpFrac * 100).toFixed(1) + "%";
+    }
+
+    // boss health bar
+    const boss = G.activeBoss;
+    if (el.bossBar) {
+      if (boss && !boss.dead) {
+        el.bossBar.classList.remove("hidden");
+        if (el.bossName) el.bossName.textContent = boss.def.name;
+        if (el.bossFill) el.bossFill.style.width = (U.clamp(boss.hp / boss.maxHp, 0, 1) * 100).toFixed(1) + "%";
+        if (el.bossFill) el.bossFill.style.background = boss.color;
+      } else {
+        el.bossBar.classList.add("hidden");
+      }
+    }
 
     ui.renderHotbar(G);
   };
@@ -64,10 +88,12 @@
     }
   };
   ui._abbr = function (it) {
-    if (it.kind === "tool") return "⛏";
+    if (it.kind === "tool")   return "⛏";
     if (it.kind === "weapon") return it.icon === "gun" ? "▸" : "⚔";
-    if (it.kind === "torch") return "≀";
+    if (it.kind === "torch")  return "≀";
     if (it.kind === "consumable") return "✚";
+    if (it.kind === "armor" && it.slot === "head")  return "⬡";
+    if (it.kind === "armor" && it.slot === "chest") return "▣";
     return "";
   };
 
@@ -106,9 +132,48 @@
   /* ---------- inventory ---------- */
   ui.showInventory = function (G) {
     ui.openOverlay("INVENTORY", ui._invBody(G));
+    ui._wireInventory(G);
   };
   ui._invBody = function (G) {
-    let body = '<div class="menu-section-label">Your pack. Slots 1–10 are your hotbar. Mats stack; tools &amp; weapons select to use.</div>';
+    // armor slot section
+    const slots = ["head", "chest"];
+    const slotLabel = { head: "Head", chest: "Body" };
+    let armorHtml = '<div style="display:flex;gap:10px;margin-bottom:12px;">';
+    for (const slot of slots) {
+      const itemId = G.equipped[slot];
+      const it = itemId ? D.items[itemId] : null;
+      armorHtml += '<div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 10px;">' +
+        '<div style="font-size:10px;color:var(--ink-dim);letter-spacing:1px;margin-bottom:4px;">' + slotLabel[slot].toUpperCase() + '</div>';
+      if (it) {
+        armorHtml += '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="width:22px;height:22px;background:' + it.color + ';border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#10131a;">' + ui._abbr(it) + '</span>' +
+          '<span style="font-size:12px;color:' + it.color + ';">' + it.name + '</span>' +
+          '<span style="font-size:11px;color:var(--good);margin-left:auto;">' + (it.armor.defense * 100 | 0) + '% def</span>' +
+          '<button class="btn alt" style="padding:3px 8px;font-size:11px;" data-unequip="' + slot + '">▽</button></div>';
+      } else {
+        armorHtml += '<div style="font-size:11px;color:var(--ink-dim);font-style:italic;">— empty —</div>';
+      }
+      armorHtml += '</div>';
+    }
+    armorHtml += '</div>';
+
+    // armor in inventory
+    const armorItems = G.inv.reduce((a, s) => { if (s) { const it = D.items[s.item]; if (it && it.kind === "armor") a.push(s.item); } return a; }, []);
+    let equipSection = "";
+    if (armorItems.length) {
+      equipSection = '<div class="menu-section-label">ARMOR IN PACK — click to equip</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">';
+      for (const itemId of armorItems) {
+        const it = D.items[itemId];
+        equipSection += '<button class="btn" style="display:flex;align-items:center;gap:6px;" data-equip="' + itemId + '">' +
+          '<span style="width:18px;height:18px;background:' + it.color + ';border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#10131a;">' + ui._abbr(it) + '</span>' +
+          it.name + ' <span style="font-size:10px;opacity:0.7;">(' + (it.armor.defense * 100 | 0) + '% ' + it.slot + ')</span>' +
+          '</button>';
+      }
+      equipSection += '</div>';
+    }
+
+    let body = armorHtml + equipSection;
+    body += '<div class="menu-section-label">PACK — slots 1–10 are your hotbar</div>';
     body += '<div class="inv-grid">';
     for (let i = 0; i < G.inv.length; i++) {
       const st = G.inv[i];
@@ -122,6 +187,20 @@
     }
     body += '</div>';
     return body;
+  };
+
+  ui._wireInventory = function (G) {
+    el.overlayBody.querySelectorAll("[data-equip]").forEach(btn => {
+      btn.addEventListener("click", () => { G.equip(btn.getAttribute("data-equip")); ui.showInventory(G); });
+    });
+    el.overlayBody.querySelectorAll("[data-unequip]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const slot = btn.getAttribute("data-unequip");
+        const itemId = G.equipped[slot];
+        if (itemId) { G.addItem(itemId, 1); G.equipped[slot] = null; }
+        ui.showInventory(G);
+      });
+    });
   };
 
   /* ---------- crafting at a station ---------- */
